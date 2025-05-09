@@ -11,7 +11,5 @@ Hong Kong A&E Waiting Time，数据每15分钟更新一次。
 
 数据来源于 https://huggingface.co/datasets/StannumX/aedemo
 
-https://keen-robinette-iridiumxue-031f0577.koyeb.app/
-
 # Demo
 https://keen-robinette-iridiumxue-031f0577.koyeb.app/
