@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用程序文件
 COPY app.py .
-COPY aedemobg.png .  # 确保背景图片被复制
+# 确保背景图片被复制
+COPY aedemobg.png .
 
 # 创建非root用户
 RUN useradd -m -u 1000 user
