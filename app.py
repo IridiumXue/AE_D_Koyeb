@@ -94,13 +94,16 @@ def main():
         display_treemap(df)
         
         # 更新说明
-        st.markdown(
-            '<div class="black-text update-info">'
-            '数据在每小时的第4、21、36、51分钟自动更新<br>'
-            'Data is automatically updated at the 4, 21, 36 and 51 minutes of each hour.'
-            '</div>',
-            unsafe_allow_html=True
-        )
+        if df is not None and not df.empty:
+            # 从数据中获取最后更新时间
+            last_update_time = df['hospTimeEn'].iloc[0]  # 假设所有记录的时间戳相同
+            st.markdown(
+                f'<div class="black-text update-info">'
+                f'数据最后更新时间：{last_update_time}<br>'
+                f'Data last updated: {last_update_time}'
+                '</div>',
+                unsafe_allow_html=True
+            )
 
 def parse_wait_time(text):
     """将等待文本转为数值，但保留格式用于显示"""
