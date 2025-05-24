@@ -246,12 +246,6 @@ def display_treemap(df):
         yaxis=dict(visible=False)
     )
     
-    # 额外设置，强制去除边框
-    fig.update_traces(
-        marker_line=dict(width=0, color='rgba(0,0,0,0)'),
-        line=dict(width=0, color='rgba(0,0,0,0)')
-    )
-    
     # 显示树图
     st.plotly_chart(fig, use_container_width=True)
     
