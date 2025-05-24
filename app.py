@@ -48,13 +48,23 @@ def main():
             background-color: transparent !important;
         }}
         
-        /* 强制去除树图边框 */
+        /* 强制去除树图边框 - 更全面的选择器 */
         .js-plotly-plot .treemap path,
         .js-plotly-plot .treemap-entry path,
-        .js-plotly-plot g.treemap path {{
+        .js-plotly-plot g.treemap path,
+        .js-plotly-plot svg g path,
+        .js-plotly-plot .trace path,
+        .plotly .treemap path {{
             stroke: none !important;
             stroke-width: 0 !important;
             stroke-opacity: 0 !important;
+            border: none !important;
+        }}
+        
+        /* 直接针对所有SVG路径元素 */
+        .js-plotly-plot svg path {{
+            stroke: transparent !important;
+            stroke-width: 0 !important;
         }}
         
         /* 修正树图内文字颜色 - 通过CSS覆盖 */
@@ -229,11 +239,44 @@ def display_treemap(df):
         coloraxis_showscale=False,  # 隐藏色彩比例尺
         height=600,  # 调整高度
         paper_bgcolor='rgba(0,0,0,0)',  # 透明背景
-        plot_bgcolor='rgba(0,0,0,0)'  # 透明背景
+        plot_bgcolor='rgba(0,0,0,0)',  # 透明背景
+        # 强制去除所有边框设置
+        showlegend=False,
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False)
+    )
+    
+    # 额外设置，强制去除边框
+    fig.update_traces(
+        marker_line=dict(width=0, color='rgba(0,0,0,0)'),
+        line=dict(width=0, color='rgba(0,0,0,0)')
     )
     
     # 显示树图
     st.plotly_chart(fig, use_container_width=True)
+    
+    # 添加强制去除边框的JavaScript
+    st.markdown("""
+    <script>
+    setTimeout(function() {
+        var paths = document.querySelectorAll('.js-plotly-plot svg path');
+        paths.forEach(function(path) {
+            path.style.stroke = 'none';
+            path.style.strokeWidth = '0';
+            path.setAttribute('stroke', 'none');
+            path.setAttribute('stroke-width', '0');
+        });
+    }, 1500);
+    
+    setTimeout(function() {
+        var paths = document.querySelectorAll('.js-plotly-plot svg path');
+        paths.forEach(function(path) {
+            path.style.stroke = 'none';
+            path.style.strokeWidth = '0';
+        });
+    }, 3000);
+    </script>
+    """, unsafe_allow_html=True)
 
 # 确保脚本在直接运行时执行主函数
 if __name__ == "__main__":
