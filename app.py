@@ -48,6 +48,15 @@ def main():
             background-color: transparent !important;
         }}
         
+        /* 强制去除树图边框 */
+        .js-plotly-plot .treemap path,
+        .js-plotly-plot .treemap-entry path,
+        .js-plotly-plot g.treemap path {{
+            stroke: none !important;
+            stroke-width: 0 !important;
+            stroke-opacity: 0 !important;
+        }}
+        
         /* 修正树图内文字颜色 - 通过CSS覆盖 */
         .js-plotly-plot .treemap-child text {{
             fill: #1A1A1A !important;
@@ -197,12 +206,15 @@ def display_treemap(df):
         branchvalues='total'  # 确保数值正确累加
     )
     
-    # 配置树图样式 - 使用方法二：设置边框宽度为0并设为透明
+    # 配置树图样式 - 完全去除边框
     fig.update_traces(
         texttemplate='%{label}',  # 只显示标签，等待时间已包含在label中
         hovertemplate='<b>%{label}</b><br>',
         marker_line_width=0,  # 边框宽度设为0
-        marker_line_color='rgba(0,0,0,0)',  # 同时设为透明以确保完全消除
+        marker_line_color='rgba(0,0,0,0)',  # 边框颜色设为透明
+        marker=dict(
+            line=dict(width=0, color='rgba(0,0,0,0)'),  # 额外确保边框设置
+        ),
         root_color='rgba(0,0,0,0)',  # 使用rgba格式的透明色
         textposition='middle center',  # 文本居中
         textfont=dict(
@@ -222,44 +234,6 @@ def display_treemap(df):
     
     # 显示树图
     st.plotly_chart(fig, use_container_width=True)
-    
-    # 添加简化的 JavaScript，只处理长等待时间的文字颜色
-    js_code = """
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        function setLongWaitTextColor() {
-            // 找到所有树图区块
-            const cells = document.querySelectorAll('.js-plotly-plot .treemap-child');
-            if (cells.length === 0) {
-                console.log("未找到树图区块，将在100ms后重试");
-                setTimeout(setLongWaitTextColor, 100);
-                return;
-            }
-            
-            // 检查等待时间，超过3小时使用白色文本
-            cells.forEach(cell => {
-                const text = cell.textContent || '';
-                if (text.includes('> 3') || text.includes('> 4') || text.includes('> 5') || 
-                    text.includes('> 6') || text.includes('> 7') || text.includes('> 8')) {
-                    // 将文本元素设置为白色
-                    const textElements = cell.querySelectorAll('text');
-                    textElements.forEach(el => {
-                        el.style.fill = "#FFFFFF";
-                    });
-                }
-            });
-        }
-        
-        // 尝试设置文本颜色
-        setTimeout(setLongWaitTextColor, 1000);
-        setTimeout(setLongWaitTextColor, 2000);
-        setTimeout(setLongWaitTextColor, 3000);
-    });
-    </script>
-    """
-    
-    # 添加JavaScript
-    st.markdown(js_code, unsafe_allow_html=True)
 
 # 确保脚本在直接运行时执行主函数
 if __name__ == "__main__":
