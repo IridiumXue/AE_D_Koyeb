@@ -37,10 +37,10 @@ def get_config():
             'timezone_offset': 8
         },
         'visualization': {
-            'figure_height': 8,
-            'figure_width': 14,
+            'figure_height': 6,
+            'figure_width': 12,
             'high_wait_threshold': 3,
-            'font_size': 12
+            'font_size': 10
         }
     }
 
@@ -258,16 +258,54 @@ class TreemapVisualizer:
         """创建树状图"""
         config = get_config()
         
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
+        # 设置matplotlib使用非交互式后端
+        plt.ioff()
+        
+        # 设置中文字体 - 使用更通用的方法
+        try:
+            # 尝试设置中文字体
+            import matplotlib.font_manager as fm
+            
+            # 查找系统中可用的中文字体
+            chinese_fonts = []
+            for font in fm.fontManager.ttflist:
+                if any(name in font.name.lower() for name in ['simhei', 'microsoft yahei', 'arial unicode', 'noto sans cjk']):
+                    chinese_fonts.append(font.name)
+            
+            if chinese_fonts:
+                plt.rcParams['font.sans-serif'] = chinese_fonts[:3] + ['DejaVu Sans']
+            else:
+                # 如果没有中文字体，使用默认字体
+                plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial']
+                
+        except:
+            # 如果字体设置失败，使用默认字体
+            plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial']
+        
         plt.rcParams['axes.unicode_minus'] = False
         
-        fig, ax = plt.subplots(figsize=(config['visualization']['figure_width'], 
-                                      config['visualization']['figure_height']))
+        # 创建图形，调整DPI以适应显示
+        fig, ax = plt.subplots(
+            figsize=(config['visualization']['figure_width'], 
+                    config['visualization']['figure_height']),
+            dpi=80
+        )
         
         # 准备数据
         values = df['waitTimeNumeric'].tolist()
-        labels = df.apply(lambda row: f"{row['hospital_name']}\n{row['hospCode']} {row['topWait']}", axis=1).tolist()
+        
+        # 简化标签显示，优先显示英文代码
+        labels = []
+        for _, row in df.iterrows():
+            hospital_code = row['hospCode']
+            wait_time = row['topWait']
+            # 如果能显示中文就显示，否则只显示英文
+            try:
+                hospital_name = row['hospital_name']
+                label = f"{hospital_name}\n{hospital_code} {wait_time}"
+            except:
+                label = f"{hospital_code}\n{wait_time}"
+            labels.append(label)
         
         # 计算布局
         layout = cls.calculate_layout(values)
@@ -287,22 +325,29 @@ class TreemapVisualizer:
             # 创建矩形
             rectangle = patches.Rectangle(
                 (rect['x'], rect['y']), rect['width'], rect['height'],
-                linewidth=1, edgecolor=(0, 0, 0, 0.2), facecolor=color
+                linewidth=1, edgecolor=(0, 0, 0, 0.3), facecolor=color
             )
             ax.add_patch(rectangle)
             
             # 添加文字
             text_color = 'white' if value >= config['visualization']['high_wait_threshold'] else 'black'
             
-            # 计算文字大小
+            # 动态计算文字大小
             area = rect['width'] * rect['height']
-            font_size = min(config['visualization']['font_size'], 
-                          max(8, int(area * 100)))
+            base_font_size = config['visualization']['font_size']
+            font_size = min(base_font_size, max(6, int(area * 80)))
+            
+            # 简化文字内容以适应小区域
+            if area < 0.02:  # 很小的区域只显示代码
+                display_text = f"{df.iloc[i]['hospCode']}\n{df.iloc[i]['topWait']}"
+                font_size = max(6, int(area * 120))
+            else:
+                display_text = labels[i]
             
             ax.text(
                 rect['x'] + rect['width']/2, 
                 rect['y'] + rect['height']/2,
-                labels[i], 
+                display_text, 
                 ha='center', va='center',
                 fontsize=font_size,
                 color=text_color,
@@ -320,7 +365,9 @@ class TreemapVisualizer:
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
         
-        plt.tight_layout()
+        # 调整布局
+        plt.tight_layout(pad=0)
+        
         return fig
 
 # ==================== 缓存函数 ====================
@@ -361,11 +408,12 @@ def main():
         # 将图表转换为图片并显示
         buf = io.BytesIO()
         fig.savefig(buf, format='png', dpi=100, bbox_inches='tight', 
-                   facecolor='none', edgecolor='none')
+                   facecolor='none', edgecolor='none', pad_inches=0.1)
         buf.seek(0)
         
         st.image(buf, use_column_width=True)
         plt.close(fig)  # 释放内存
+        plt.clf()  # 清除当前图形
     
     # 显示更新信息
     if not df.empty:
