@@ -287,7 +287,7 @@ class TreemapVisualizer:
             # 创建矩形
             rectangle = patches.Rectangle(
                 (rect['x'], rect['y']), rect['width'], rect['height'],
-                linewidth=1, edgecolor='rgba(0,0,0,0.2)', facecolor=color
+                linewidth=1, edgecolor=(0, 0, 0, 0.2), facecolor=color
             )
             ax.add_patch(rectangle)
             
