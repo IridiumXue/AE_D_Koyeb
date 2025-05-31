@@ -10,15 +10,21 @@ import io
 from typing import Optional, Dict, List
 import requests
 
+# ==================== 页面配置（必须在最前面）====================
+st.set_page_config(
+    page_title="Hong Kong A&E Waiting Time",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 # ==================== 配置 ====================
-@st.cache_data
 def get_config():
     """获取应用配置"""
     return {
         'page': {
             'title': "Hong Kong A&E Waiting Time",
-            'icon': "🏥",
-            'layout': "wide"
+            'icon': "🏥"
         },
         'style': {
             'background_image': "aedemobg.png",
@@ -38,7 +44,6 @@ def get_config():
         }
     }
 
-@st.cache_data
 def get_hospital_names():
     """获取医院名称映射"""
     return {
@@ -50,13 +55,13 @@ def get_hospital_names():
         'TMH': '屯門醫院', 'UCH': '基督教聯合醫院', 'YCH': '仁濟醫院'
     }
 
-# ==================== 數據處理 ====================
+# ==================== 数据处理 ====================
 class DataProcessor:
-    """數據處理器"""
+    """数据处理器"""
     
     @staticmethod
     def parse_wait_time(text: str) -> float:
-        """解析等待時間"""
+        """解析等待时间"""
         if not text:
             return 0
         if '< 1' in text:
@@ -68,7 +73,7 @@ class DataProcessor:
     
     @staticmethod
     def get_data_filename() -> str:
-        """生成數據文件名"""
+        """生成数据文件名"""
         config = get_config()
         now_ts = datetime.utcnow().timestamp() + config['data']['timezone_offset'] * 3600
         utc8 = datetime.utcfromtimestamp(now_ts)
@@ -86,9 +91,8 @@ class DataProcessor:
         return f"{utc8.strftime('%Y%m%d')}_{utc8.hour:02d}47.csv"
     
     @classmethod
-    @st.cache_data(ttl=300)  # 緩存5分鐘
     def load_data(cls) -> Optional[pd.DataFrame]:
-        """加載數據"""
+        """加载数据"""
         try:
             config = get_config()
             filename = cls.get_data_filename()
@@ -100,17 +104,16 @@ class DataProcessor:
             
             return df
         except Exception as e:
-            st.error(f"數據加載失敗: {e}")
+            st.error(f"数据加载失败: {e}")
             return None
 
-# ==================== 樣式處理 ====================
+# ==================== 样式处理 ====================
 class StyleManager:
-    """樣式管理器"""
+    """样式管理器"""
     
     @staticmethod
-    @st.cache_data
     def load_background_style() -> str:
-        """加載背景樣式"""
+        """加载背景样式"""
         config = get_config()
         try:
             with open(config['style']['background_image'], "rb") as f:
@@ -127,12 +130,12 @@ class StyleManager:
             }}
             """
         except Exception as e:
-            st.warning(f"背景圖片加載失敗: {e}")
+            st.warning(f"背景图片加载失败: {e}")
             return ""
     
     @classmethod
     def apply_styles(cls):
-        """應用頁面樣式"""
+        """应用页面样式"""
         config = get_config()
         bg_style = cls.load_background_style()
         
@@ -170,20 +173,20 @@ class StyleManager:
         
         st.markdown(styles, unsafe_allow_html=True)
 
-# ==================== 可視化 ====================
+# ==================== 可视化 ====================
 class TreemapVisualizer:
-    """樹狀圖可視化器"""
+    """树状图可视化器"""
     
     @staticmethod
     def create_colormap():
-        """創建顏色映射"""
+        """创建颜色映射"""
         colors = ['#ffe5e5', '#ffcccc', '#ffb2b2', '#ff9999', 
                  '#ff7f7f', '#ff6666', '#ff4c4c', '#ff3232', '#ff1919']
         return LinearSegmentedColormap.from_list("custom", colors, N=256)
     
     @classmethod
     def calculate_layout(cls, values: List[float], width: float = 1.0, height: float = 1.0) -> List[Dict]:
-        """計算樹狀圖佈局（簡化版二元分割算法）"""
+        """计算树状图布局（简化版二元分割算法）"""
         if not values:
             return []
         
@@ -209,14 +212,16 @@ class TreemapVisualizer:
             if len(items) == 0:
                 return
             
-            # 找到最佳分割點
+            # 找到最佳分割点
             total_val = sum(item[1] for item in items)
             if total_val == 0:
                 return
                 
             best_ratio = 0.5
+            split_idx = len(items) // 2
+            
             if len(items) > 1:
-                # 嘗試平衡分割
+                # 尝试平衡分割
                 cumsum = 0
                 for i in range(len(items) - 1):
                     cumsum += items[i][1]
@@ -225,11 +230,13 @@ class TreemapVisualizer:
                         best_ratio = ratio
                         split_idx = i + 1
                         break
-                else:
-                    split_idx = len(items) // 2
-                    best_ratio = sum(items[:split_idx][1] for item in items[:split_idx]) / total_val
-            else:
-                split_idx = 1
+                
+                if split_idx == 0:
+                    split_idx = 1
+                elif split_idx >= len(items):
+                    split_idx = len(items) - 1
+                
+                best_ratio = sum(item[1] for item in items[:split_idx]) / total_val
             
             if horizontal:
                 split_pos = x + w * best_ratio
@@ -248,28 +255,28 @@ class TreemapVisualizer:
     
     @classmethod
     def create_treemap(cls, df: pd.DataFrame) -> plt.Figure:
-        """創建樹狀圖"""
+        """创建树状图"""
         config = get_config()
         
-        # 設置中文字體
+        # 设置中文字体
         plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'DejaVu Sans']
         plt.rcParams['axes.unicode_minus'] = False
         
         fig, ax = plt.subplots(figsize=(config['visualization']['figure_width'], 
                                       config['visualization']['figure_height']))
         
-        # 準備數據
+        # 准备数据
         values = df['waitTimeNumeric'].tolist()
         labels = df.apply(lambda row: f"{row['hospital_name']}\n{row['hospCode']} {row['topWait']}", axis=1).tolist()
         
-        # 計算佈局
+        # 计算布局
         layout = cls.calculate_layout(values)
         
-        # 創建顏色映射
+        # 创建颜色映射
         cmap = cls.create_colormap()
         norm = plt.Normalize(vmin=0, vmax=9)
         
-        # 繪製矩形
+        # 绘制矩形
         for i, rect in enumerate(layout):
             if i >= len(df):
                 continue
@@ -277,7 +284,7 @@ class TreemapVisualizer:
             value = df.iloc[i]['waitTimeNumeric']
             color = cmap(norm(value))
             
-            # 創建矩形
+            # 创建矩形
             rectangle = patches.Rectangle(
                 (rect['x'], rect['y']), rect['width'], rect['height'],
                 linewidth=1, edgecolor='rgba(0,0,0,0.2)', facecolor=color
@@ -287,7 +294,7 @@ class TreemapVisualizer:
             # 添加文字
             text_color = 'white' if value >= config['visualization']['high_wait_threshold'] else 'black'
             
-            # 計算文字大小
+            # 计算文字大小
             area = rect['width'] * rect['height']
             font_size = min(config['visualization']['font_size'], 
                           max(8, int(area * 100)))
@@ -303,83 +310,73 @@ class TreemapVisualizer:
                 wrap=True
             )
         
-        # 設置軸
+        # 设置轴
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_aspect('equal')
         ax.axis('off')
         
-        # 設置透明背景
+        # 设置透明背景
         fig.patch.set_alpha(0)
         ax.patch.set_alpha(0)
         
         plt.tight_layout()
         return fig
 
-# ==================== 主應用 ====================
-class App:
-    """主應用類"""
+# ==================== 缓存函数 ====================
+@st.cache_data(ttl=300)  # 缓存5分钟
+def cached_load_data():
+    """缓存的数据加载函数"""
+    return DataProcessor.load_data()
+
+@st.cache_data
+def cached_background_style():
+    """缓存的背景样式加载"""
+    return StyleManager.load_background_style()
+
+# ==================== 主应用 ====================
+def main():
+    """主函数"""
+    # 应用样式
+    StyleManager.apply_styles()
     
-    @staticmethod
-    def setup_page():
-        """設置頁面"""
-        config = get_config()
-        st.set_page_config(
-            page_title=config['page']['title'],
-            page_icon=config['page']['icon'],
-            layout=config['page']['layout'],
-            initial_sidebar_state="collapsed"
-        )
-        
-        StyleManager.apply_styles()
-        
-        st.markdown(
-            f'<h1 class="black-text title-text">{config["page"]["icon"]} {config["page"]["title"]}</h1>',
-            unsafe_allow_html=True
-        )
+    # 显示标题
+    config = get_config()
+    st.markdown(
+        f'<h1 class="black-text title-text">{config["page"]["icon"]} {config["page"]["title"]}</h1>',
+        unsafe_allow_html=True
+    )
     
-    @staticmethod
-    def display_visualization(df: pd.DataFrame):
-        """顯示可視化"""
+    # 加载数据
+    df = cached_load_data()
+    
+    if df is None:
+        st.warning("无法加载数据，请检查网络连接或稍后再试。")
+        return
+    
+    # 显示可视化
+    with st.spinner("正在生成可视化..."):
         fig = TreemapVisualizer.create_treemap(df)
         
-        # 將圖表轉換為圖片並顯示
+        # 将图表转换为图片并显示
         buf = io.BytesIO()
         fig.savefig(buf, format='png', dpi=100, bbox_inches='tight', 
                    facecolor='none', edgecolor='none')
         buf.seek(0)
         
         st.image(buf, use_column_width=True)
-        plt.close(fig)  # 釋放內存
+        plt.close(fig)  # 释放内存
     
-    @staticmethod
-    def display_update_info(df: pd.DataFrame):
-        """顯示更新信息"""
-        if df is not None and not df.empty:
-            last_update = df['hospTimeEn'].iloc[0]
-            st.markdown(
-                f'<div class="black-text update-info">'
-                f'數據最後更新時間：{last_update}<br>'
-                f'Data last updated: {last_update}'
-                '</div>',
-                unsafe_allow_html=True
-            )
-    
-    @classmethod
-    def run(cls):
-        """運行應用"""
-        cls.setup_page()
-        
-        df = DataProcessor.load_data()
-        
-        if df is None:
-            st.warning("無法加載數據，請檢查網絡連接或稍後再試。")
-            return
-        
-        with st.spinner("正在生成可視化..."):
-            cls.display_visualization(df)
-        
-        cls.display_update_info(df)
+    # 显示更新信息
+    if not df.empty:
+        last_update = df['hospTimeEn'].iloc[0]
+        st.markdown(
+            f'<div class="black-text update-info">'
+            f'数据最后更新时间：{last_update}<br>'
+            f'Data last updated: {last_update}'
+            '</div>',
+            unsafe_allow_html=True
+        )
 
 if __name__ == "__main__":
-    App.run()
+    main()
