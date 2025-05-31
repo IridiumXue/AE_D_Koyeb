@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 import base64
 
@@ -13,16 +14,15 @@ def main():
     )
     
     # 使用本地图片文件作为背景
-    with open("aedemobg.png", "rb") as f:
-        bg_image_bytes = f.read()
-    
-    # 将图片编码为base64
-    bg_image_base64 = base64.b64encode(bg_image_bytes).decode()
-    
-    # 设置背景样式和全局样式
-    st.markdown(
-        f"""
-        <style>
+    try:
+        with open("aedemobg.png", "rb") as f:
+            bg_image_bytes = f.read()
+        
+        # 将图片编码为base64
+        bg_image_base64 = base64.b64encode(bg_image_bytes).decode()
+        
+        # 设置带背景图的样式
+        background_style = f"""
         .stApp {{
             background-image: url("data:image/png;base64,{bg_image_base64}");
             background-size: cover;
@@ -30,6 +30,16 @@ def main():
             background-repeat: no-repeat;
             background-attachment: fixed;
         }}
+        """
+    except Exception as e:
+        st.warning(f"无法加载背景图片: {e}")
+        background_style = ""
+    
+    # 设置全局样式
+    st.markdown(
+        f"""
+        <style>
+        {background_style}
         
         /* 全局文字色 */
         h1, h2, h3, p, span, div {{
@@ -48,17 +58,7 @@ def main():
             background-color: transparent !important;
         }}
         
-        /* 修正树图内文字颜色 - 通过CSS覆盖 */
-        .js-plotly-plot .treemap-child text {{
-            fill: #1A1A1A !important;
-        }}
-        
-        /* 对于等待时间>3h的区块，覆盖为白色文字 */
-        .js-plotly-plot .treemap-child text[data-long-wait="true"] {{
-            fill: #FFFFFF !important;
-        }}
-        
-        /* 标题和更新信息共用样式 - 确保一致的外观 */
+        /* 标题和更新信息共用样式 */
         .black-text {{
             color: #000000 !important;
             font-weight: 600 !important;
@@ -81,7 +81,7 @@ def main():
         unsafe_allow_html=True
     )
     
-    # 页面标题 - 使用与更新信息相同的样式类
+    # 页面标题
     st.markdown('<h1 class="black-text title-text">🏥 Hong Kong A&E Waiting Time</h1>', unsafe_allow_html=True)
     
     # 加载数据
@@ -90,17 +90,20 @@ def main():
     if df is None:
         st.warning("无法加载数据，请检查网络连接或稍后再试。")
     else:
-        # 显示树图
+        # 树图
         display_treemap(df)
         
-        # 更新说明 - 使用相同的基础样式类
-        st.markdown(
-            '<div class="black-text update-info">'
-            '数据在每小时的第4、21、36、51分钟自动更新<br>'
-            'Data is automatically updated at the 4, 21, 36 and 51 minutes of each hour.'
-            '</div>',
-            unsafe_allow_html=True
-        )
+        # 更新说明
+        if df is not None and not df.empty:
+            # 从数据中获取最后更新时间
+            last_update_time = df['hospTimeEn'].iloc[0]  # 假设所有记录的时间戳相同
+            st.markdown(
+                f'<div class="black-text update-info">'
+                f'数据最后更新时间：{last_update_time}<br>'
+                f'Data last updated: {last_update_time}'
+                '</div>',
+                unsafe_allow_html=True
+            )
 
 def parse_wait_time(text):
     """将等待文本转为数值，但保留格式用于显示"""
@@ -172,88 +175,100 @@ hospital_names = {
 }
 
 def display_treemap(df):
-    """显示树图可视化"""
+    """显示树图可视化 - 使用直接指定文本颜色的方法"""
     # 准备树图数据
     treemap_df = df.copy()
     treemap_df['hospital_name'] = treemap_df['hospCode'].map(hospital_names)
     
-    # 确保等待时间显示在文本中
-    treemap_df['display_name'] = treemap_df['hospital_name'] + '<br>' + treemap_df['hospCode'] + ' ' + treemap_df['topWait']
-    
-    # 添加标记长等待时间的列（用于着色）
-    treemap_df['is_long_wait'] = treemap_df['topWait'].apply(
-        lambda x: '> 3' in x or '> 4' in x or '> 5' in x or '> 6' in x or '> 7' in x or '> 8' in x
+    # 确定文本颜色 - 关键改变：直接在数据中指定每个方块的文本颜色
+    treemap_df['text_color'] = treemap_df['waitTimeNumeric'].apply(
+        lambda x: 'white' if x >= 3 else 'black'
     )
     
-    # 生成树图
-    fig = px.treemap(
-        treemap_df,
-        path=['display_name'],  # 单层树图
-        values='waitTimeNumeric',  # 根据等待时间调整方块大小
-        color='waitTimeNumeric',   # 根据等待时间着色
-        color_continuous_scale=get_color_scale(),  # 使用原有的渐变色方案
-        range_color=[0, 9],  # 颜色映射范围，与原来的9档一致
-        custom_data=['topWait', 'hospCode', 'waitTimeNumeric', 'is_long_wait'],  # 额外数据用于标签和悬停
-        branchvalues='total'  # 确保数值正确累加
+    # 创建自定义标签，带有HTML格式的颜色
+    treemap_df['display_name'] = treemap_df.apply(
+        lambda row: f"{row['hospital_name']}<br>{row['hospCode']} {row['topWait']}",
+        axis=1
     )
     
-    # 配置树图样式 - 修复root_color值
-    fig.update_traces(
-        texttemplate='%{label}',  # 只显示标签，等待时间已包含在label中
-        hovertemplate='<b>%{label}</b><br>',
-        marker_line_width=1,
-        marker_line_color='rgba(0,0,0,0.2)',
-        root_color='rgba(0,0,0,0)',  # 使用rgba格式的透明色
-        textposition='middle center',  # 文本居中
+    # 创建图表，但不使用px.treemap，而是使用更直接的go.Treemap
+    fig = go.Figure(go.Treemap(
+        labels=treemap_df['display_name'],
+        parents=[""] * len(treemap_df),  # 所有项目都是顶级项目
+        values=treemap_df['waitTimeNumeric'],
+        branchvalues="total",
+        marker=dict(
+            colors=treemap_df['waitTimeNumeric'],
+            colorscale=get_color_scale(),
+            cmin=0,
+            cmax=9,
+            line=dict(width=1, color='rgba(0,0,0,0.2)')
+        ),
         textfont=dict(
+            # 直接在这里设置文本颜色
+            color=treemap_df['text_color'],
             family="Arial, sans-serif",
-            size=20  # 使用固定字体大小，替换原来的动态大小
-        )
-    )
+            size=20
+        ),
+        hovertemplate='<b>%{label}</b><br>',
+        textposition="middle center"
+    ))
     
     # 设置布局
     fig.update_layout(
-        margin=dict(t=0, l=0, r=0, b=0),  # 去除边距
-        coloraxis_showscale=False,  # 隐藏色彩比例尺
-        height=600,  # 调整高度
-        paper_bgcolor='rgba(0,0,0,0)',  # 透明背景
-        plot_bgcolor='rgba(0,0,0,0)'  # 透明背景
+        margin=dict(t=0, l=0, r=0, b=0),
+        height=600,
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        coloraxis_showscale=False
     )
     
     # 显示树图
     st.plotly_chart(fig, use_container_width=True)
     
-    # 添加简化的 JavaScript，只处理长等待时间的文字颜色
+    # 备份方案：如果直接设置颜色失败，尝试用JavaScript修复
+    # 这个JavaScript更有针对性，直接修改SVG文本元素
     js_code = """
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        function setLongWaitTextColor() {
-            // 找到所有树图区块
-            const cells = document.querySelectorAll('.js-plotly-plot .treemap-child');
-            if (cells.length === 0) {
-                console.log("未找到树图区块，将在100ms后重试");
-                setTimeout(setLongWaitTextColor, 100);
-                return;
-            }
-            
-            // 检查等待时间，超过3小时使用白色文本
-            cells.forEach(cell => {
-                const text = cell.textContent || '';
-                if (text.includes('> 3') || text.includes('> 4') || text.includes('> 5') || 
-                    text.includes('> 6') || text.includes('> 7') || text.includes('> 8')) {
-                    // 将文本元素设置为白色
-                    const textElements = cell.querySelectorAll('text');
-                    textElements.forEach(el => {
-                        el.style.fill = "#FFFFFF";
-                    });
+    function fixTextColors() {
+        try {
+            // 直接定位所有SVG文本元素
+            const allTextElements = document.querySelectorAll('svg text');
+            allTextElements.forEach(text => {
+                const content = text.textContent || '';
+                // 检查内容是否包含指定的等待时间
+                if (content.includes('> 3') || content.includes('> 4') || 
+                    content.includes('> 5') || content.includes('> 6') || 
+                    content.includes('> 7') || content.includes('> 8')) {
+                    // 强制设置文本颜色
+                    text.setAttribute('fill', '#FFFFFF');
+                    text.style.setProperty('fill', '#FFFFFF', 'important');
+                    // 还可以尝试设置stroke属性，以增强可见性
+                    text.setAttribute('stroke', 'none');
                 }
             });
+        } catch (e) {
+            console.error('Error fixing text colors:', e);
         }
-        
-        // 尝试设置文本颜色
-        setTimeout(setLongWaitTextColor, 1000);
-        setTimeout(setLongWaitTextColor, 2000);
-        setTimeout(setLongWaitTextColor, 3000);
+    }
+
+    // 多次尝试应用文本颜色修复
+    setTimeout(fixTextColors, 500);
+    setTimeout(fixTextColors, 1000);
+    setTimeout(fixTextColors, 2000);
+    setTimeout(fixTextColors, 3000);
+    
+    // 监听DOM变化，持续应用修复
+    const observer = new MutationObserver((mutations) => {
+        fixTextColors();
+    });
+    
+    // 开始观察文档变化
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['fill', 'style']
     });
     </script>
     """
