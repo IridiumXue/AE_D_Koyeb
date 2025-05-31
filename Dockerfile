@@ -1,32 +1,33 @@
-# Dockerfile
+# 使用更輕量的基礎鏡像
 FROM python:3.9-slim
 
 WORKDIR /app
-RUN pip install --upgrade pip
-# 安装系统依赖
+
+# 安裝系統依賴（僅必需的）
 RUN apt-get update && apt-get install -y \
     build-essential \
-    curl \
-    libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制依赖文件并安装
+# 優化pip安裝
+RUN pip install --upgrade pip --no-cache-dir
+
+# 分層安裝依賴以利用Docker緩存
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制应用程序文件
+# 複製應用文件
 COPY app.py .
-# 确保背景图片被复制
 COPY aedemobg.png .
 
-# 创建非root用户
+# 創建非root用戶
 RUN useradd -m -u 1000 user
 USER user
 
-# 设置环境变量
+# 設置環境變量
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    MPLBACKEND=Agg
 
 WORKDIR $HOME/app
 COPY --chown=user . $HOME/app
@@ -34,5 +35,9 @@ COPY --chown=user . $HOME/app
 # 暴露端口
 EXPOSE 7860
 
-# 运行应用
-CMD ["streamlit", "run", "app.py", "--server.port=7860", "--server.address=0.0.0.0"]
+# 健康檢查
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:7860/_stcore/health || exit 1
+
+# 運行應用
+CMD ["streamlit", "run", "app.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.maxUploadSize=1", "--server.enableCORS=false"]
