@@ -19,7 +19,7 @@ class Config:
     UPDATE_INFO_SIZE = "2em"
     
     # 数据配置
-    DATA_BASE_URL = "https://huggingface.co/datasets/StannumX/aedemo/raw/main/data/"
+    DATA_BASE_URL = "https://huggingface.co/datasets/StannumX/ae0815/raw/main/data/"
     TIMEZONE_OFFSET = 8  # UTC+8
     
     # 可视化配置
